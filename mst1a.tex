@@ -1,0 +1,62 @@
+\documentclass{article}
+\usepackage{syntax}
+\usepackage[utf8x]{inputenc}
+% for token symbols in grammar
+\newcommand{\lex}[1]{\underline{#1}}
+% for semantic actions in grammar
+\usepackage{tikz}
+\newcommand*\action[1]{\tikz[baseline=(char.base)]{
+    \node[shape=circle,draw,color=red!70!black,inner sep=1pt] (char) {#1};}}
+
+\title{Milestone 1A - Group 06}
+\author{Teodora Anitoaei \and Tibor Beke \and Edward Kim \and Martin Nowak}
+\date{}
+
+\begin{document}
+\maketitle
+\newpage
+\section{Transform the µ-Opal EBNF Grammar to an equivalen BNF grammar}
+\paragraph{EBNF Grammar}
+\begin{grammar}
+<Prog> ::= <Def>+ \lex{\#}
+
+<Def> ::= \lex{DEF} <Lhs> \lex{==} <Expr>
+
+<Lhs> ::= \lex{MAIN} \lex{:} <Type>
+    \alt \lex{id} \lex{(} [ \lex{id} \lex{:} <Type> (\lex{,} \lex{id} \lex{:} <Type>)*] \lex{)} \lex{:} <Type>
+
+<Type> ::= \lex{nat} | \lex{bool}
+
+<Expr> ::= \lex{number} | \lex{true} | \lex{false}
+    \alt \lex{id} [ \lex{(} <Expr> (\lex{,} <Expr>)* \lex{)} ]
+    \alt \lex{IF} <Expr> \lex{THEN} <Expr> [\lex{ELSE} <Expr>] \lex{FI}
+\end{grammar}
+
+\paragraph{Equivalent BNF Grammar with semantic actions}
+
+\begin{grammar}
+<Prog> ::= <Defs> \lex{\#} \action{1}
+
+<Defs> ::= <Def> \action{2} | <Def> <Defs> \action{3}
+
+<Def> ::= \lex{DEF} <Lhs> \lex{==} <Expr> \action{4}
+
+<Lhs> ::= \lex{MAIN} \lex{:} <Type> \action{5}
+    \alt \lex{id} \lex{(} \lex{)} \lex{:} <Type> \action{6}
+    \alt \lex{id} \lex{(} <Params> \lex{)} \lex{:} <Type> \action{7}
+
+<Params> ::= <Param> \action{8} | <Param> \lex{,} <Params> \action{9}
+
+<Param> ::= \lex{id} \lex{:} <Type> \action{10}
+
+<Type> ::= \lex{nat} \action{11} | \lex{bool} \action{12}
+
+<Expr> ::= \lex{number} \action{13} | \lex{true} \action{14} | \lex{false} \action{15} | \lex{id} \action{16}
+    \alt \lex{id} \lex{(} <Args> \lex{)} \action{17}
+    \alt \lex{IF} <Expr> \lex{THEN} <Expr> \lex{FI}  \action{18}
+    \alt \lex{IF} <Expr> \lex{THEN} <Expr> \lex{ELSE} <Expr> \lex{FI}  \action{19}
+
+<Args> ::= <Expr> \action{20} | <Expr> \lex{,} <Args> \action{21}
+\end{grammar}
+
+\end{document}
