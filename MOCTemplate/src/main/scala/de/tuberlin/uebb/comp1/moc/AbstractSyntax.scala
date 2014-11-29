@@ -32,15 +32,13 @@ package de.tuberlin.uebb.comp1.moc
 
 object AbstractSyntax {
   /** A complete program */
-  case class Prog(defs: Array[Def])
+  case class Prog(defs: List[Def])
 
   case class Def(decl: Decl, expr: Expr)
 
   // Decl == Lhs in grammar
   abstract class Decl
-  case class Main(ty: Type) extends Decl
-  case class Val(id: String, ty: Type) extends Decl
-  case class Func(id: String, ty: Type, params: Array[Param]) extends Decl
+  case class Func(id: String, ty: Type, params: List[Param]=Nil) extends Decl
 
   case class Param(id: String, ty: Type)
 
@@ -49,8 +47,8 @@ object AbstractSyntax {
   case object True extends Expr
   case object False extends Expr
   case class Id(id: String) extends Expr
-  case class Call(id: String, args: Array[Expr]) extends Expr
-  case class If(cond: Expr, thenExpr: Expr, elseExpr: Expr=null) extends Expr
+  case class Call(id: String, args: List[Expr]) extends Expr
+  case class If(cond: Expr, thenExpr: Expr, elseExpr: Option[Expr]=None) extends Expr
 
   abstract class Type
   case object Natural extends Type
