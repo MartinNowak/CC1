@@ -28,10 +28,15 @@
 
 package de.tuberlin.uebb.comp1.moc
 
+
 /** Parser for μ-Opal-Compiler*/
 
 object Parser {
   import AbstractSyntax._
+  import de.tuberlin.uebb.comp1.parsing.ParserCombinators
+  import de.tuberlin.uebb.comp1.parsing.ParserCombinators._
+
+  type P[A] = Parser[Token, A]
 
   /**
    * Starts the parser
@@ -41,6 +46,172 @@ object Parser {
    * @return either an error message [[Diag]] or a list of definitions [[Def]]
    */
   def parse(inp: List[Token], opts: Options): Either[Diag, Prog] = {
-    Left(Diag("Parser not yet implemented", Global))
+    run(inp, parseProg) match {
+      case Fail(ParseErrorMessage(diag)) => Left(diag)
+      case Okay(e) => Right(e)
+      case _ => throw new RuntimeException("compiler bug")
+    }
   }
+
+  private def parseProg : P[Prog] =
+    parseDefs ~< parseEOT ~* (Prog(_))
+
+  private def parseDefs : P[List[Def]] =
+    parseDef ~ parseDefs1 ~* makeDefs
+
+  private def parseDefs1 : P[List[Def]] =
+    parseDefs |^
+    followDefs1 ~> eps(List()) |^
+    fail("DEF")
+
+  private def followDefs1 = peek((t: Token) => t == EofT())
+
+  private def parseDef : P[Def] =
+    skip(DefT()) ~> parseLhs ~< skip(DefAsT()) ~ parseExpr ~* makeDef
+
+  private def parseLhs : P[Decl] =
+    parseMain |^
+    parseFunc |^
+    fail("identifier", "MAIN")
+
+  private def parseMain : P[Decl] =
+    shift(MainT()) ~ shift(ColonT()) ~> parseType ~* (Func("MAIN", _))
+
+  private def parseFunc : P[Decl] =
+    parseId ~< shift(OpenT()) ~ parseParams ~< shift(CloseT()) ~<
+      shift(ColonT()) ~ parseType ~* makeFunc
+
+  private def parseParams : P[List[Param]] =
+    parseParams1 |^
+    followParams ~> eps(List()) |^
+    fail("identifier", ")")
+
+  private def followParams = peek((t: Token) => t == CloseT())
+
+  private def parseParams1 : P[List[Param]] =
+    parseParam ~& parseParams2 |^
+    fail("identifier")
+
+  private def parseParams2(p: Param) : P[List[Param]] =
+    shift(CommaT()) ~> parseParams1 ~* (p :: _) |^
+    followParams2 ~> eps(List(p)) |^
+    fail(",", ")")
+
+  private def followParams2 = followParams
+
+  private def parseParam : P[Param] =
+    parseId ~< shift(ColonT()) ~ parseType ~* makeParam |^
+    fail("identifier")
+
+  private def parseEOT = skip(EofT())
+
+  private def parseId : P[String] = shift(_.isVar, "identifier") ~* makeId
+
+  private def parseType : P[Type] =
+    shift(NatT()) ~> eps(Natural:Type) |^
+    shift(BoolT()) ~> eps(Bool) |^
+    fail("nat", "bool")
+
+  private def parseExpr : P[Expr] =
+    shift(_.isNum, "number") ~* makeNumber |^
+    shift(TrueT()) ~> eps(True) |^
+    shift(FalseT()) ~> eps(False) |^
+    parseId ~& parseExpr2 |^
+    shift(IfT()) ~> parseExpr ~< shift(ThenT()) ~ parseExpr ~& parseExpr1 |^
+    fail("number", "true", "false", "identifier", "IF")
+
+  private def parseExpr1(a : (Expr, Expr)) : P[Expr] =
+    shift(ElseT()) ~> parseExpr ~< shift(FiT()) ~* (Some(_)) ~* makeIf(a) |^
+    shift(FiT()) ~> eps(None) ~* makeIf(a) |^
+    fail("ELSE", "FI")
+
+  private def parseExpr2(id : String) : P[Expr] =
+    shift(OpenT()) ~> parseArgs ~< shift(CloseT()) ~* (Call(id, _):Expr) |^
+    followExpr2 ~> eps(Id(id)) |^
+    fail("THEN", "FI", "ELSE", ",", "DEF", "(", ")", "EOF")
+
+  private def followExpr2 = peek((t: Token) =>
+    t == ThenT() || t == FiT() || t == ElseT() || t == CommaT() ||
+    t == DefT() || t == EofT() || t == CloseT()
+  )
+
+  private def parseArgs : P[List[Expr]] =
+    parseArgs1 |^
+    followArgs ~> eps(Nil) |^
+    fail("number", "true", "false", "identifier", "IF", ")")
+
+  private def parseArgs1 : P[List[Expr]] =
+    parseExpr ~& parseArgs2
+    fail("number", "true", "false", "identifier", "IF")
+
+  private def parseArgs2(e: Expr) : P[List[Expr]] =
+    shift(CommaT()) ~> parseArgs1 ~* (e :: _) |^
+    followArgs2 ~> eps(List(e)) |^
+    fail(",", ")")
+
+  private def followArgs = peek((t: Token) => t == CloseT())
+
+  private def followArgs2 = followArgs
+
+  // helper parser combinators
+  private def skip(t: Token): P[Unit] = ParserCombinators.skip(
+    _ == t,
+    t1 => ParseErrorMessage(
+      Diag("Expecting '"+t.toString()+"', but found '"+t1.toString()+ "' instead.", t1.getPosition))
+  )
+
+  private def shift(t: Token): P[Token] = shift(_ == t, t.toString())
+
+  private def shift(pred: (Token => Boolean), str: String): P[Token] = ParserCombinators.shift(
+    pred,
+    t1 => ParseErrorMessage(
+      Diag("Expecting '"+str+"', but found "+t1.toString()+ " instead.", t1.getPosition))
+  )
+
+  // semantic actions
+  private def makeDefs(a: (Def, List[Def])) = a match {
+    case (d, lst) => d :: lst
+  }
+
+  private def makeDef(a: (Decl, Expr)) = a match {
+    case (d, e) => Def(d, e)
+  }
+
+  private def makeId(id: Token) = id match {
+    case VarT(id) => id
+  }
+
+  private def makeFunc(a: ((String, List[Param]), Type)) : Decl = a match {
+    case ((id, params), ty) => Func(id, ty, params)
+  }
+
+  private def makeParam(a: (String, Type)) = a match {
+    case (id, ty) => Param(id, ty)
+  }
+
+  private def makeNumber(t : Token) : Expr = t match {
+    case NumT(value) => Num(value)
+  }
+
+  private def makeTrue(t : Token) : Expr = t match {
+    case TrueT() => True
+  }
+
+  private def makeFalse(t : Token) : Expr = t match {
+    case FalseT() => False
+  }
+
+  private def makeIf(a: (Expr, Expr)) : Option[Expr] => Expr = a match {
+    case (cond, e1) => e2 => If(cond, e1, e2)
+  }
+
+  // error handling
+  private def fail[A](exp: String*): P[A] =
+    ParserCombinators.fail(t => ParseErrorMessage(Diag(
+      exp.length match {
+        case 1 => "Expecting '"+exp.apply(0).toString+"' but found '"+t.toString()+"' instead."
+        case _ => "Expecting one of "+exp.map("'"+_.toString+"'").mkString(", ")+" but found '"+t.toString()+"' instead."
+      } , t.getPosition)))
+
+  private case class ParseErrorMessage(diag: Diag) extends Message
 }
