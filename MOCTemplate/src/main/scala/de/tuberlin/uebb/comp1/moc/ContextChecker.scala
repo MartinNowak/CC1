@@ -34,6 +34,9 @@ object ContextChecker {
   import AbstractSyntax._
 
   type SymTab = Map[String, Def]
+  case class Ctx(tab: SymTab, errs: Array[Diag])
+
+  type Params = Map[String, Type]
 
   /**
    * Starts context check for μ-Opal
@@ -42,37 +45,143 @@ object ContextChecker {
    * @return A list of error messages
     */
   def check(prog: Prog, opts: Options): Option[List[Diag]] = {
-    buildSymTab(prog.defs) match {
-      case (symTab, Some(errs)) => Some(errs.toList)
-      case (symTab, None) => checkDefs(prog.defs, symTab).map(_.toList)
+    val errs = runChecks(prog.defs, buildSymTab(prog.defs))
+    if (errs.isEmpty) None else Some(errs.toList)
+  }
+
+  def runChecks(defs: List[Def], ctx: Ctx): Array[Diag] = {
+    val checks = checkMain _ andThen (defs.foldLeft(_)(checkDef))
+    checks(ctx).errs
+  }
+
+  def checkMain(c: Ctx): Ctx =
+    if (c.tab contains "MAIN") c
+    else Ctx(c.tab, c.errs :+ Diag("DEF MAIN not found", Global))
+
+  def checkDef(c: Ctx, d: Def): Ctx = {
+    def duplicate(name: String) =
+      Diag("Duplicate param '"+name+"' in DEF "+d.decl.id+".", d.pos);
+
+    val (params, errs) = d.decl.params.
+      foldLeft((Map[String, Type](), c.errs))((acc, p) => acc match {
+        case (params, errs) =>
+          if (params contains p.id) (params, errs :+ duplicate(p.id))
+          else (params + (p.id -> p.ty), errs)
+      })
+
+    typeCheck(d, Ctx(c.tab, errs), params)
+  }
+
+  def typeCheck(d: Def, c: Ctx, params: Params) = {
+    def mismatch(ty: Type) =
+      Diag("The result type of DEF '"++d.decl.id+"' is "+ty+" but was declared as "+d.decl.ty+".", d.pos)
+
+    val (ty, c2) = exprType(d.expr, c, params)
+    ty match {
+      case TypeError | d.decl.ty => c2
+      case _ => Ctx(c2.tab, c2.errs :+ mismatch(ty))
     }
   }
 
-  def checkDefs(defs: List[Def], symTab: SymTab): Option[Array[Diag]] = {
-    ???
-  }
+  def exprType(e: Expr, c: Ctx, params: Params): (Type, Ctx) = {
+    def typeError(c :Ctx, msg: String) =
+      (TypeError, Ctx(c.tab, c.errs :+ Diag(msg, Global))) // TODO: e.pos
+
+    e match {
+    case Num(v) => (Natural, c)
+    case True | False => (Bool, c)
+    case Id(id) =>
+        if (!(params contains id))
+          typeError(c, "Undefined variable '"+id+"'.")
+        else
+          (params(id), c)
+
+    case Call(id, args) =>
+        def argCountMismatch(nargs: Int, nparams: Int) =
+          Diag("DEF '"+id+"' expects "+nparams+" arguments, but "
+            +nargs+" were given.", Global)
+
+        def argTypeMismatch(arg: Type, par: Param, pos: Int) =
+          Diag("Can't pass a "+arg+" as "+ordinal(1+pos)+" argument to '"+
+            par.id+":"+par.ty+"' of DEF '"+id+"'.", Global)
+
+        if (!(c.tab contains id))
+          typeError(c, "Undefined DEF '"+id+"'.")
+        else {
+          var (argTypes, c2) = args.foldLeft((Array[Type](), c))((acc, arg) => acc match {
+            case (argTypes, c2) => exprType(arg, c2, params) match {
+              case (ty, c3) => (argTypes :+ ty, c3)
+            }
+          })
+
+          val d = c.tab(id)
+          val nargs = argTypes.length
+          val nparams = d.decl.params.length
+
+          val c3 = if (nargs == nparams) c2
+          else Ctx(c2.tab, c2.errs :+ argCountMismatch(nargs, nparams))
+
+          val c4 = argTypes.zip(d.decl.params).
+            zipWithIndex.foldLeft(c3)((c, elem) => elem match {
+            case ((arg, par), pos) =>
+              if (arg == par.ty) c
+              else Ctx(c.tab, c.errs :+ argTypeMismatch(arg, par, pos))
+          })
+          // return the function type regardless of errors
+          // so to report most errors in a single pass
+          (d.decl.ty, c4)
+        }
+
+    case If(cond, e1, e2) =>
+        def condMustBeBool(tc: Type) =
+          Diag("IF condition must be a bool, not "+tc+".", Global)
+
+        def typeMismatch(t1: Type, t2: Type) =
+          Diag("Types for then and else branches differ, "+t1+" vs. "+t2+".", Global)
+
+        // TODO: should really use a state monad here
+        val (tc, c1) = exprType(cond, c, params)
+        val (t1, c2) = exprType(e1, c1, params)
+        val (t2, c3) = e2 match {
+          case None => (t1, c2) // fake same type
+          case Some(e) => exprType(e, c2, params)
+        }
+
+        val c4 = if (tc == Bool) c3
+        else Ctx(c3.tab, c3.errs :+ condMustBeBool(tc))
+
+        val c5 = if (t1 == t2) c4
+        else Ctx(c4.tab, c4.errs :+ typeMismatch(t1, t2))
+
+        // return the most reasonable type regardless of
+        // errors so to report most errors in a single pass
+        (t1, c5)
+
+    case Builtin(id) => (c.tab(id).decl.ty, c)
+    }
+ }
 
   private def buildSymTab(defs: List[Def]) = {
     def duplicate(d: Def, tab: SymTab) = {
       var id = d.decl.id
-      Diag("'"+id+"' already defined at '"+tab(id).pos+"'.", d.pos)
+      Diag("DEF '"+id+"' already defined at '"+tab(id).pos+"'.", d.pos)
     }
 
-    def build(defs: List[Def], tab: SymTab, errs: Array[Diag]): (SymTab, Option[Array[Diag]]) = {
+    def build(defs: List[Def], tab: SymTab, errs: Array[Diag]): Ctx = {
       defs match {
         case d :: ds =>
           var id = d.decl.id
           if (tab contains id) build(ds, tab, errs :+ duplicate(d, tab))
           else build(ds, tab + (id -> d), errs)
-        case Nil => (tab, Some(errs))
+        case Nil => Ctx(tab, errs)
       }
     }
     build(defs, builtins, Array())
   }
 
-  object DefaultOptions extends Options(false, false, false, "default")
-
   private def builtins : SymTab = {
+    object DefaultOptions extends Options(false, false, false, "default")
+
     var str = """
     DEF add(X: nat, Y: nat): nat DEF sub(X: nat, Y: nat): nat
     DEF mul(X: nat, Y: nat): nat DEF div(X: nat, Y: nat): nat
@@ -81,9 +190,17 @@ object ContextChecker {
     DEF not(X: bool): bool
     """
 
+    // parse the builtin declarations, and return them as symbol table
     Scanner.scan(str, DefaultOptions).fold(Left(_), Parser.parseBuiltins(_)) match {
       case Left(diag) => throw new Exception("failed to parse builtins "+diag.msg)
       case Right(defs) => (defs map (d => (d.decl.id, d))).toMap
     }
+  }
+
+  private def ordinal(num: Int): String = num % 10 match {
+    case 1 if num != 11 => num + "st"
+    case 2 if num != 12 => num + "nd"
+    case 3 if num != 13 => num + "rd"
+    case _ => num + "th"
   }
 }

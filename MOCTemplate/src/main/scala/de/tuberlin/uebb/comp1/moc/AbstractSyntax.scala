@@ -50,6 +50,13 @@ object AbstractSyntax {
   case class Builtin(name: String) extends Expr
 
   sealed abstract class Type
-  case object Natural extends Type
-  case object Bool extends Type
+  case object Natural extends Type {
+    override def toString = "nat"
+  }
+  case object Bool extends Type {
+    override def toString = "bool"
+  }
+  case object TypeError extends Type {
+    override def toString = "error"
+  }
 }
