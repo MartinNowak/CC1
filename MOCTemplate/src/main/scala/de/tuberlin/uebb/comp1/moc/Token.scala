@@ -83,7 +83,6 @@ case class DefT() extends Token {
 /** Represents end of file */
 case class EofT() extends Token {
   override def toString(): String = "<EOF>"
-  override def getPosition: Position = Global
 }
 
 /** Represents "IF" */

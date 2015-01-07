@@ -55,7 +55,15 @@ object Scanner extends RegexParsers with Parsers {
       case failure: NoSuccess => Left(Diag(failure.msg, Global))
     }
 
-  private def scanToks: Parser[List[Token]] = (scanComment*) ~ (scanTok*) ^^ { case _ ~ l => l :+ EofT() }
+  private def scanToks: Parser[List[Token]] =
+    (scanComment*) ~ (scanTok*) ~ scanEof ^^ {
+    case _ ~ l ~ eof => {
+      l :+ eof
+    }
+    }
+
+  private def scanEof: Parser[Token] =
+    (scanComment*) ~> positioned("""\z""".r ^^ { _ => EofT() })
 
   private def scanTok: Parser[Token] = (scanComment*) ~ (
     scanOpen |
@@ -103,7 +111,7 @@ object Scanner extends RegexParsers with Parsers {
   private def scanTBool = positioned(TBoolLex.r ^^ { _ => BoolT() })
   private def scanTNat = positioned(TNatLex.r ^^ { _ => NatT() })
 
-  private val commentRegex: Regex = """--[^\n]*\n""".r
+  private val commentRegex: Regex = """--[^\n]*([\n]|\z)""".r
   private val numRegex: Regex = """\d+""".r
   private val varRegex: Regex = """[a-zA-Z][a-zA-Z0-9]*""".r
 
