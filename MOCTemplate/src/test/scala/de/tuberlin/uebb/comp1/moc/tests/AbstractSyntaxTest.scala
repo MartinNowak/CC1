@@ -39,9 +39,9 @@ class AbstractSyntaxTest extends FunSpec with Matchers {
 
   describe("Decl") {
     it("should be possible to declare a function") {
-      var d : Decl = Func("flag", Bool)
-      d = Func("MAIN", Natural)
-      d = Func("cond", Natural, List(Param("a", Bool), Param("b", Natural), Param("c", Natural)))
+      var d : Decl = Decl("flag", Bool)
+      d = Decl("MAIN", Natural)
+      d = Decl("cond", Natural, List(Param("a", Bool), Param("b", Natural), Param("c", Natural)))
     }
   }
 
@@ -49,12 +49,12 @@ class AbstractSyntaxTest extends FunSpec with Matchers {
     it("should be possible to define functions") {
       var d = Def(
         Global,
-        Func("cond", Natural, List(Param("c", Bool), Param("a", Natural), Param("b", Natural))),
+        Decl("cond", Natural, List(Param("c", Bool), Param("a", Natural), Param("b", Natural))),
         If(Id("c"), Id("a"), Some(Id("b")))
       )
       d = Def(
         Global,
-        Func("not", Bool, List(Param("val", Bool))),
+        Decl("not", Bool, List(Param("val", Bool))),
         If(Id("val"), False, Some(True))
       )
     }

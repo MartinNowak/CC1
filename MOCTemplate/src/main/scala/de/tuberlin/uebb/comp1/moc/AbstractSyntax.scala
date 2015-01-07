@@ -36,9 +36,7 @@ object AbstractSyntax {
 
   case class Def(pos: Position, decl: Decl, expr: Expr)
 
-  // Decl == Lhs in grammar
-  abstract class Decl
-  case class Func(id: String, ty: Type, params: List[Param]=Nil) extends Decl
+  case class Decl(id: String, ty: Type, params: List[Param]=Nil)
 
   case class Param(id: String, ty: Type)
 

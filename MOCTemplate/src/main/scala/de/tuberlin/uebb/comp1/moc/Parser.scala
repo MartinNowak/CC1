@@ -71,15 +71,15 @@ object Parser {
 
   private def parseLhs : P[Decl] =
     parseMain |^
-    parseFunc |^
+    parseDecl |^
     fail("identifier", "MAIN")
 
   private def parseMain : P[Decl] =
-    shift(MainT()) ~ shift(ColonT()) ~> parseType ~* (Func("MAIN", _))
+    shift(MainT()) ~ shift(ColonT()) ~> parseType ~* (Decl("MAIN", _))
 
-  private def parseFunc : P[Decl] =
+  private def parseDecl : P[Decl] =
     parseId ~< shift(OpenT()) ~ parseParams ~< shift(CloseT()) ~<
-      shift(ColonT()) ~ parseType ~* makeFunc
+      shift(ColonT()) ~ parseType ~* makeDecl
 
   private def parseParams : P[List[Param]] =
     parseParams1 |^
@@ -183,8 +183,8 @@ object Parser {
     case VarT(id) => id
   }
 
-  private def makeFunc(a: ((String, List[Param]), Type)) : Decl = a match {
-    case ((id, params), ty) => Func(id, ty, params)
+  private def makeDecl(a: ((String, List[Param]), Type)) : Decl = a match {
+    case ((id, params), ty) => Decl(id, ty, params)
   }
 
   private def makeParam(a: (String, Type)) = a match {
