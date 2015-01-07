@@ -34,7 +34,12 @@ object ContextChecker {
   import AbstractSyntax._
 
   type SymTab = Map[String, Def]
-  case class Ctx(tab: SymTab, errs: Array[Diag])
+  case class Ctx(tab: SymTab, errs: Array[Diag]) {
+    def push(diag: Diag) = Ctx(tab, errs :+ diag)
+    def push(sym: (String, Def)) = sym match {
+      case (id, d) => Ctx(tab + (id -> d), errs)
+    }
+  }
 
   type Params = Map[String, Type]
 
@@ -56,7 +61,7 @@ object ContextChecker {
 
   def checkMain(c: Ctx): Ctx =
     if (c.tab contains "MAIN") c
-    else Ctx(c.tab, c.errs :+ Diag("DEF MAIN not found", Global))
+    else c.push(Diag("DEF MAIN not found", Global))
 
   def checkDef(c: Ctx, d: Def): Ctx = {
     def duplicate(name: String) =
@@ -79,7 +84,7 @@ object ContextChecker {
     val (ty, c2) = exprType(d.expr, c, params)
     ty match {
       case TypeError | d.decl.ty => c2
-      case _ => Ctx(c2.tab, c2.errs :+ mismatch(ty))
+      case _ => c2.push(mismatch(ty))
     }
   }
 
@@ -93,7 +98,7 @@ object ContextChecker {
           Diag("Undefined variable '"+id+"'.", loc)
 
         if (!(params contains id))
-          (TypeError, Ctx(c.tab, c.errs :+ undefined()))
+          (TypeError, c.push(undefined()))
         else
           (params(id), c)
 
@@ -110,7 +115,7 @@ object ContextChecker {
             par.id+":"+par.ty+"' of DEF '"+id+"'.", loc)
 
         if (!(c.tab contains id))
-          (TypeError, Ctx(c.tab, c.errs :+ undefined()))
+          (TypeError, c.push(undefined()))
         else {
           var (argTypes, c2) = args.foldLeft((Array[Type](), c))((acc, arg) => acc match {
             case (argTypes, c2) => exprType(arg, c2, params) match {
@@ -123,13 +128,13 @@ object ContextChecker {
           val nparams = d.decl.params.length
 
           val c3 = if (nargs == nparams) c2
-          else Ctx(c2.tab, c2.errs :+ argCountMismatch(nargs, nparams))
+          else c2.push(argCountMismatch(nargs, nparams))
 
           val c4 = argTypes.zip(d.decl.params).
             zipWithIndex.foldLeft(c3)((c, elem) => elem match {
             case ((arg, par), pos) =>
               if (arg == par.ty) c
-              else Ctx(c.tab, c.errs :+ argTypeMismatch(arg, par, pos))
+              else c.push(argTypeMismatch(arg, par, pos))
           })
           // return the function type regardless of errors
           // so to report most errors in a single pass
@@ -152,10 +157,10 @@ object ContextChecker {
         }
 
         val c4 = if (tc == Bool) c3
-        else Ctx(c3.tab, c3.errs :+ condMustBeBool(tc))
+        else c3.push(condMustBeBool(tc))
 
         val c5 = if (t1 == t2) c4
-        else Ctx(c4.tab, c4.errs :+ typeMismatch(t1, t2))
+        else c4.push(typeMismatch(t1, t2))
 
         // return the most reasonable type regardless of
         // errors so to report most errors in a single pass
@@ -166,21 +171,21 @@ object ContextChecker {
  }
 
   private def buildSymTab(defs: List[Def]) = {
-    def duplicate(d: Def, tab: SymTab) = {
+    def duplicate(d: Def, loc: Position) = {
       var id = d.decl.id
-      Diag("DEF '"+id+"' already defined at '"+tab(id).loc+"'.", d.loc)
+      Diag("DEF '"+id+"' already defined at '"+loc+"'.", d.loc)
     }
 
-    def build(defs: List[Def], tab: SymTab, errs: Array[Diag]): Ctx = {
+    def build(defs: List[Def], c: Ctx): Ctx = {
       defs match {
         case d :: ds =>
           var id = d.decl.id
-          if (tab contains id) build(ds, tab, errs :+ duplicate(d, tab))
-          else build(ds, tab + (id -> d), errs)
-        case Nil => Ctx(tab, errs)
+          if (c.tab contains id) build(ds, c.push(duplicate(d, c.tab(id).loc)))
+          else build(ds, c.push((id -> d)))
+        case Nil => c
       }
     }
-    build(defs, builtins, Array())
+    build(defs, Ctx(builtins, Array()))
   }
 
   private def builtins : SymTab = {
