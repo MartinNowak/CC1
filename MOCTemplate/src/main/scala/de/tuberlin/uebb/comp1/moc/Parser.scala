@@ -67,7 +67,7 @@ object Parser {
   private def followDefs1 = peek((t: Token) => t == EofT())
 
   private def parseDef : P[Def] =
-    skip(DefT()) ~> parseLhs ~< skip(DefAsT()) ~ parseExpr ~* makeDef
+    getLoc ~< skip(DefT()) ~ parseLhs ~< skip(DefAsT()) ~ parseExpr ~* makeDef
 
   private def parseLhs : P[Decl] =
     parseMain |^
@@ -168,13 +168,15 @@ object Parser {
       Diag("Expecting '"+str+"', but found "+t1.toString()+ " instead.", t1.getPosition))
   )
 
+  private def getLoc: P[Position] = peek() ~* (_.getPosition)
+
   // semantic actions
   private def makeDefs(a: (Def, List[Def])) = a match {
     case (d, lst) => d :: lst
   }
 
-  private def makeDef(a: (Decl, Expr)) = a match {
-    case (d, e) => Def(d, e)
+  private def makeDef(a: ((Position, Decl), Expr)) = a match {
+    case ((p, d), e) => Def(p, d, e)
   }
 
   private def makeId(id: Token) = id match {

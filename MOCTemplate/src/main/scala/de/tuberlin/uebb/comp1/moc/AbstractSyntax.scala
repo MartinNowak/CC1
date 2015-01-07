@@ -34,7 +34,7 @@ object AbstractSyntax {
   /** A complete program */
   case class Prog(defs: List[Def])
 
-  case class Def(decl: Decl, expr: Expr)
+  case class Def(pos: Position, decl: Decl, expr: Expr)
 
   // Decl == Lhs in grammar
   abstract class Decl
