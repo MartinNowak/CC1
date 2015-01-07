@@ -40,7 +40,7 @@ object AbstractSyntax {
 
   case class Param(id: String, ty: Type)
 
-  abstract class Expr
+  sealed abstract class Expr
   case class Num(num: Int) extends Expr
   case object True extends Expr
   case object False extends Expr
@@ -48,7 +48,7 @@ object AbstractSyntax {
   case class Call(id: String, args: List[Expr]) extends Expr
   case class If(cond: Expr, thenExpr: Expr, elseExpr: Option[Expr]=None) extends Expr
 
-  abstract class Type
+  sealed abstract class Type
   case object Natural extends Type
   case object Bool extends Type
 }
