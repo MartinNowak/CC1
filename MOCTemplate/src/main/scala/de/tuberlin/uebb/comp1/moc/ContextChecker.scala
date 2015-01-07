@@ -33,13 +33,57 @@ package de.tuberlin.uebb.comp1.moc
 object ContextChecker {
   import AbstractSyntax._
 
+  type SymTab = Map[String, Def]
+
   /**
    * Starts context check for μ-Opal
    * @param prog Complete program [[Prog]]
    * @param opts [[Options]] given as arguments to compiler
    * @return A list of error messages
-   */
+    */
   def check(prog: Prog, opts: Options): Option[List[Diag]] = {
-    Some(List(Diag("Context checker not yet implemented", Global)))
+    buildSymTab(prog.defs) match {
+      case (symTab, Some(errs)) => Some(errs.toList)
+      case (symTab, None) => checkDefs(prog.defs, symTab).map(_.toList)
+    }
+  }
+
+  def checkDefs(defs: List[Def], symTab: SymTab): Option[Array[Diag]] = {
+    ???
+  }
+
+  private def buildSymTab(defs: List[Def]) = {
+    def duplicate(d: Def, tab: SymTab) = {
+      var id = d.decl.id
+      Diag("'"+id+"' already defined at '"+tab(id).pos+"'.", d.pos)
+    }
+
+    def build(defs: List[Def], tab: SymTab, errs: Array[Diag]): (SymTab, Option[Array[Diag]]) = {
+      defs match {
+        case d :: ds =>
+          var id = d.decl.id
+          if (tab contains id) build(ds, tab, errs :+ duplicate(d, tab))
+          else build(ds, tab + (id -> d), errs)
+        case Nil => (tab, Some(errs))
+      }
+    }
+    build(defs, builtins, Array())
+  }
+
+  object DefaultOptions extends Options(false, false, false, "default")
+
+  private def builtins : SymTab = {
+    var str = """
+    DEF add(X: nat, Y: nat): nat DEF sub(X: nat, Y: nat): nat
+    DEF mul(X: nat, Y: nat): nat DEF div(X: nat, Y: nat): nat
+    DEF eq(X: nat, Y: nat): bool DEF lt(X: nat, Y: nat): bool
+    DEF and(X: bool, Y: bool): bool DEF or(X: bool, Y: bool): bool
+    DEF not(X: bool): bool
+    """
+
+    Scanner.scan(str, DefaultOptions).fold(Left(_), Parser.parseBuiltins(_)) match {
+      case Left(diag) => throw new Exception("failed to parse builtins "+diag.msg)
+      case Right(defs) => (defs map (d => (d.decl.id, d))).toMap
+    }
   }
 }

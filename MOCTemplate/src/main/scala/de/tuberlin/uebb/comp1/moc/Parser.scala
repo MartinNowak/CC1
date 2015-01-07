@@ -39,6 +39,35 @@ object Parser {
   type P[A] = Parser[Token, A]
 
   /**
+    * Parser for builtins
+    */
+  def parseBuiltins(inp: List[Token]): Either[Diag, List[Def]] = {
+    run(inp, parseBuiltins) match {
+      case Fail(ParseErrorMessage(diag)) => Left(diag)
+      case Okay(e) => Right(e)
+      case _ => throw new RuntimeException("compiler bug")
+    }
+  }
+
+  private def parseBuiltins : P[List[Def]] =
+    parseBuiltin ~ parseBuiltins1 ~* makeBuiltins
+
+  private def parseBuiltins1 : P[List[Def]] =
+    parseBuiltins |^
+    followBuiltins1 ~> eps(List()) |^
+    fail("DEF")
+
+  // DEF add(x:nat, y:nat):nat
+  private def parseBuiltin =
+    skip(DefT()) ~> parseDecl
+
+  private def followBuiltins1 = peek((t: Token) => t == EofT())
+
+  private def makeBuiltins(a: (Decl, List[Def])) = a match {
+    case (d, lst) => Def(Global, d, Builtin(d.id)) :: lst
+  }
+
+  /**
    * Starts the parser
    *
    * @param inp the token sequence (result of scanner)

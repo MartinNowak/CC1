@@ -47,6 +47,7 @@ object AbstractSyntax {
   case class Id(id: String) extends Expr
   case class Call(id: String, args: List[Expr]) extends Expr
   case class If(cond: Expr, thenExpr: Expr, elseExpr: Option[Expr]=None) extends Expr
+  case class Builtin(name: String) extends Expr
 
   sealed abstract class Type
   case object Natural extends Type
