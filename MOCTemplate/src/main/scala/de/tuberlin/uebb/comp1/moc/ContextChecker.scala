@@ -60,7 +60,7 @@ object ContextChecker {
 
   def checkDef(c: Ctx, d: Def): Ctx = {
     def duplicate(name: String) =
-      Diag("Duplicate param '"+name+"' in DEF "+d.decl.id+".", d.pos);
+      Diag("Duplicate param '"+name+"' in DEF "+d.decl.id+".", d.loc);
 
     val (params, errs) = d.decl.params.
       foldLeft((Map[String, Type](), c.errs))((acc, p) => acc match {
@@ -74,7 +74,7 @@ object ContextChecker {
 
   def typeCheck(d: Def, c: Ctx, params: Params) = {
     def mismatch(ty: Type) =
-      Diag("The result type of DEF '"++d.decl.id+"' is "+ty+" but was declared as "+d.decl.ty+".", d.pos)
+      Diag("The result type of DEF '"++d.decl.id+"' is "+ty+" but was declared as "+d.decl.ty+".", d.loc)
 
     val (ty, c2) = exprType(d.expr, c, params)
     ty match {
@@ -84,29 +84,33 @@ object ContextChecker {
   }
 
   def exprType(e: Expr, c: Ctx, params: Params): (Type, Ctx) = {
-    def typeError(c :Ctx, msg: String) =
-      (TypeError, Ctx(c.tab, c.errs :+ Diag(msg, Global))) // TODO: e.pos
-
     e match {
     case Num(v) => (Natural, c)
     case True | False => (Bool, c)
-    case Id(id) =>
+    case Id(loc, id) =>
+
+        def undefined() =
+          Diag("Undefined variable '"+id+"'.", loc)
+
         if (!(params contains id))
-          typeError(c, "Undefined variable '"+id+"'.")
+          (TypeError, Ctx(c.tab, c.errs :+ undefined()))
         else
           (params(id), c)
 
-    case Call(id, args) =>
+    case Call(loc, id, args) =>
+        def undefined() =
+          Diag("Undefined DEF '"+id+"'.", loc)
+
         def argCountMismatch(nargs: Int, nparams: Int) =
           Diag("DEF '"+id+"' expects "+nparams+" arguments, but "
-            +nargs+" were given.", Global)
+            +nargs+" were given.", loc)
 
         def argTypeMismatch(arg: Type, par: Param, pos: Int) =
           Diag("Can't pass a "+arg+" as "+ordinal(1+pos)+" argument to '"+
-            par.id+":"+par.ty+"' of DEF '"+id+"'.", Global)
+            par.id+":"+par.ty+"' of DEF '"+id+"'.", loc)
 
         if (!(c.tab contains id))
-          typeError(c, "Undefined DEF '"+id+"'.")
+          (TypeError, Ctx(c.tab, c.errs :+ undefined()))
         else {
           var (argTypes, c2) = args.foldLeft((Array[Type](), c))((acc, arg) => acc match {
             case (argTypes, c2) => exprType(arg, c2, params) match {
@@ -132,12 +136,12 @@ object ContextChecker {
           (d.decl.ty, c4)
         }
 
-    case If(cond, e1, e2) =>
+    case If(loc, cond, e1, e2) =>
         def condMustBeBool(tc: Type) =
-          Diag("IF condition must be a bool, not "+tc+".", Global)
+          Diag("IF condition must be a bool, not "+tc+".", loc)
 
         def typeMismatch(t1: Type, t2: Type) =
-          Diag("Types for then and else branches differ, "+t1+" vs. "+t2+".", Global)
+          Diag("Types for then and else branches differ, "+t1+" vs. "+t2+".", loc)
 
         // TODO: should really use a state monad here
         val (tc, c1) = exprType(cond, c, params)
@@ -164,7 +168,7 @@ object ContextChecker {
   private def buildSymTab(defs: List[Def]) = {
     def duplicate(d: Def, tab: SymTab) = {
       var id = d.decl.id
-      Diag("DEF '"+id+"' already defined at '"+tab(id).pos+"'.", d.pos)
+      Diag("DEF '"+id+"' already defined at '"+tab(id).loc+"'.", d.loc)
     }
 
     def build(defs: List[Def], tab: SymTab, errs: Array[Diag]): Ctx = {

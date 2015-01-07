@@ -145,19 +145,21 @@ object Parser {
     shift(_.isNum, "number") ~* makeNumber |^
     shift(TrueT()) ~> eps(True) |^
     shift(FalseT()) ~> eps(False) |^
-    parseId ~& parseExpr2 |^
-    shift(IfT()) ~> parseExpr ~< shift(ThenT()) ~ parseExpr ~& parseExpr1 |^
+    getLoc ~ parseId ~& parseExpr2 |^
+    getLoc ~< shift(IfT()) ~ parseExpr ~< shift(ThenT()) ~ parseExpr ~& parseExpr1 |^
     fail("number", "true", "false", "identifier", "IF")
 
-  private def parseExpr1(a : (Expr, Expr)) : P[Expr] =
+  private def parseExpr1(a : ((Position, Expr), Expr)) : P[Expr] =
     shift(ElseT()) ~> parseExpr ~< shift(FiT()) ~* (Some(_)) ~* makeIf(a) |^
     shift(FiT()) ~> eps(None) ~* makeIf(a) |^
     fail("ELSE", "FI")
 
-  private def parseExpr2(id : String) : P[Expr] =
-    shift(OpenT()) ~> parseArgs ~< shift(CloseT()) ~* (Call(id, _):Expr) |^
-    followExpr2 ~> eps(Id(id)) |^
-    fail("THEN", "FI", "ELSE", ",", "DEF", "(", ")", "EOF")
+  private def parseExpr2(tup: (Position, String)) : P[Expr] = tup match {
+    case (pos, id) =>
+      shift(OpenT()) ~> parseArgs ~< shift(CloseT()) ~* (Call(pos, id, _):Expr) |^
+      followExpr2 ~> eps(Id(pos, id)) |^
+      fail("THEN", "FI", "ELSE", ",", "DEF", "(", ")", "EOF")
+  }
 
   private def followExpr2 = peek((t: Token) =>
     t == ThenT() || t == FiT() || t == ElseT() || t == CommaT() ||
@@ -232,8 +234,8 @@ object Parser {
     case FalseT() => False
   }
 
-  private def makeIf(a: (Expr, Expr)) : Option[Expr] => Expr = a match {
-    case (cond, e1) => e2 => If(cond, e1, e2)
+  private def makeIf(a: ((Position, Expr), Expr)) : Option[Expr] => Expr = a match {
+    case ((loc, cond), e1) => e2 => If(loc, cond, e1, e2)
   }
 
   // error handling

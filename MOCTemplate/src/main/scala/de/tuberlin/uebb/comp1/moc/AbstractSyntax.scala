@@ -34,7 +34,7 @@ object AbstractSyntax {
   /** A complete program */
   case class Prog(defs: List[Def])
 
-  case class Def(pos: Position, decl: Decl, expr: Expr)
+  case class Def(loc: Position, decl: Decl, expr: Expr)
 
   case class Decl(id: String, ty: Type, params: List[Param]=Nil)
 
@@ -44,9 +44,9 @@ object AbstractSyntax {
   case class Num(num: Int) extends Expr
   case object True extends Expr
   case object False extends Expr
-  case class Id(id: String) extends Expr
-  case class Call(id: String, args: List[Expr]) extends Expr
-  case class If(cond: Expr, thenExpr: Expr, elseExpr: Option[Expr]=None) extends Expr
+  case class Id(loc: Position, id: String) extends Expr
+  case class Call(loc: Position, id: String, args: List[Expr]) extends Expr
+  case class If(loc: Position, cond: Expr, thenExpr: Expr, elseExpr: Option[Expr]=None) extends Expr
   case class Builtin(name: String) extends Expr
 
   sealed abstract class Type

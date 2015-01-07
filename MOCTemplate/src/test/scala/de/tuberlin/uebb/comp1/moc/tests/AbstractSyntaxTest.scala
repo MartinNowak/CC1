@@ -21,16 +21,17 @@ class AbstractSyntaxTest extends FunSpec with Matchers {
 
   describe("Expr") {
     it("should be possible to build expression graphs") {
+      val loc = Global
       var e : Expr = True
       e = False
       e = Num(10)
-      e = Call("gt", List(e, Num(20)))
-      e = Id("foobar")
-      e = Call("foobar", List(e, Id("var1"), Num(10), False))
-      e = If(e, Num(12), Some(False))
+      e = Call(loc, "gt", List(e, Num(20)))
+      e = Id(loc, "foobar")
+      e = Call(loc, "foobar", List(e, Id(loc, "var1"), Num(10), False))
+      e = If(loc, e, Num(12), Some(False))
     }
     it("should be possible to instantiate an If Expr without else body") {
-      val e = If(True, False)
+      val e = If(Global, True, False)
       e.cond shouldBe True
       e.thenExpr shouldBe False
       e.elseExpr shouldBe None
@@ -47,15 +48,16 @@ class AbstractSyntaxTest extends FunSpec with Matchers {
 
   describe("Def") {
     it("should be possible to define functions") {
+      val loc = Global
       var d = Def(
-        Global,
+        loc,
         Decl("cond", Natural, List(Param("c", Bool), Param("a", Natural), Param("b", Natural))),
-        If(Id("c"), Id("a"), Some(Id("b")))
+        If(loc, Id(loc, "c"), Id(loc, "a"), Some(Id(loc, "b")))
       )
       d = Def(
-        Global,
+        loc,
         Decl("not", Bool, List(Param("val", Bool))),
-        If(Id("val"), False, Some(True))
+        If(loc, Id(loc, "val"), False, Some(True))
       )
     }
   }
