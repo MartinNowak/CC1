@@ -35,7 +35,6 @@ import scala.util.matching.Regex
 import scala.collection.mutable.ListBuffer
 import scala.language.postfixOps
 
-
 /** Scanner for μ-Opal based on Scala's combinators */
 
 object Scanner extends RegexParsers with Parsers {
@@ -57,9 +56,9 @@ object Scanner extends RegexParsers with Parsers {
 
   private def scanToks: Parser[List[Token]] =
     (scanComment*) ~ (scanTok*) ~ scanEof ^^ {
-    case _ ~ l ~ eof => {
-      l :+ eof
-    }
+      case _ ~ l ~ eof => {
+        l :+ eof
+      }
     }
 
   private def scanEof: Parser[Token] =
@@ -93,28 +92,31 @@ object Scanner extends RegexParsers with Parsers {
   private def scanComma = positioned(CommaLex.r ^^ { _ => CommaT() })
   private def scanColon = positioned(ColonLex.r ^^ { _ => ColonT() })
   private def scanDefAs = positioned(DefAsLex.r ^^ { _ => DefAsT() })
-  private def scanMain = positioned(MainLex.r ^^ { _ => MainT() })
-  private def scanDef = positioned(DefLex.r ^^ { _ => DefT() })
+  private def scanMain = positioned(keyword(MainLex) ^^ { _ => MainT() })
+  private def scanDef = positioned(keyword(DefLex) ^^ { _ => DefT() })
 
-  private def scanIf = positioned(IfLex.r ^^ { _ => IfT() })
-  private def scanThen = positioned(ThenLex.r ^^ { _ => ThenT() })
-  private def scanElse = positioned(ElseLex.r ^^ { _ => ElseT() })
-  private def scanFi = positioned(FiLex.r ^^ { _ => FiT() })
+  private def scanIf = positioned(keyword(IfLex) ^^ { _ => IfT() })
+  private def scanThen = positioned(keyword(ThenLex) ^^ { _ => ThenT() })
+  private def scanElse = positioned(keyword(ElseLex) ^^ { _ => ElseT() })
+  private def scanFi = positioned(keyword(FiLex) ^^ { _ => FiT() })
 
   // TODO: better error msg: regex `\z` expected means: identifiers must start with small letter
   private def scanVar: Parser[Token] = positioned(varRegex ^^ { n => VarT(n) })
 
   private def scanNum = positioned(numRegex ^^ { n => NumT(n.toInt) })
-  private def scanTrue = positioned(TrueLex.r ^^ { _ => TrueT() })
-  private def scanFalse = positioned(FalseLex.r ^^ { _ => FalseT() })
+  private def scanTrue = positioned(keyword(TrueLex) ^^ { _ => TrueT() })
+  private def scanFalse = positioned(keyword(FalseLex) ^^ { _ => FalseT() })
 
-  private def scanTBool = positioned(TBoolLex.r ^^ { _ => BoolT() })
-  private def scanTNat = positioned(TNatLex.r ^^ { _ => NatT() })
+  private def scanTBool = positioned(keyword(TBoolLex) ^^ { _ => BoolT() })
+  private def scanTNat = positioned(keyword(TNatLex) ^^ { _ => NatT() })
 
   private val commentRegex: Regex = """--[^\n]*([\n]|\z)""".r
   private val numRegex: Regex = """\d+""".r
   private val varRegex: Regex = """[a-zA-Z][a-zA-Z0-9]*""".r
 
+  private def keyword(lex: String): Regex =
+    (lex + """(?![a-zA-Z0-9])""").r // Negative look-ahead assertion to avoid recognizing DEFun as a keyword and an identifier
+  
   private val OpenLex = """\("""
   private val CloseLex = """\)"""
   private val CommaLex = ""","""
