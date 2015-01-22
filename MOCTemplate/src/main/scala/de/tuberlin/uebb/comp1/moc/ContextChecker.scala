@@ -170,7 +170,7 @@ object ContextChecker {
     }
  }
 
-  private def buildSymTab(defs: List[Def]) = {
+  def buildSymTab(defs: List[Def]) = {
     def duplicate(d: Def, loc: Position) = {
       var id = d.decl.id
       Diag("DEF '"+id+"' already defined at '"+loc+"'.", d.loc)
