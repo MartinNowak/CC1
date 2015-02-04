@@ -108,7 +108,7 @@ object Interpreter {
   }
 
   private def checkOverflow(res: Long, a: Long, b: Long, op: String): Value = {
-    if (res < Int.MinValue)
+    if (res < 0)
       throw new InterpreterException("Underflow while computing "+a+" "+op+" "+b+".")
     else if (res > Int.MaxValue)
       throw new InterpreterException("Overflow while computing "+a+" "+op+" "+b+".")
